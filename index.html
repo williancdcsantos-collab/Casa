@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Casa</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="theme-color" content="#2b7a58">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Casa">
+<style>
+:root{--bg:#f3f6f2;--surface:#fff;--ink:#16241d;--muted:#5f7468;--line:#d3ded6;--accent:#2b7a58;--accent-ink:#fff;--warn:#b5481f}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1a14;--surface:#18271f;--ink:#e8f2ec;--muted:#95ab9e;--line:#2b4034;--accent:#5fd0a0;--accent-ink:#07241a;--warn:#f0956b;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;justify-content:center}
+main{width:100%;max-width:480px;min-height:100vh;padding:calc(22px + env(safe-area-inset-top,0px)) 18px calc(40px + env(safe-area-inset-bottom,0px))}
+h1{font-size:1.8rem;line-height:1.1;font-weight:800;letter-spacing:-.02em;margin:0}
+h2{font-size:1.5rem;font-weight:800;margin:0 0 6px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:18px}
+.muted{color:var(--muted)}
+button,.btn{font:inherit;font-weight:600;font-size:1rem;border-radius:12px;padding:12px 16px;border:2px solid var(--line);background:transparent;color:var(--ink);cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.small{padding:7px 12px;font-size:.9rem}
+.tabs{display:flex;gap:8px;margin-bottom:16px}
+.tabs button{flex:1}
+.tabs .on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.card{background:var(--surface);border:2px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.card.done{opacity:.55}
+.tag{display:inline-block;font-size:.85rem;font-weight:600;color:var(--accent);margin-bottom:4px}
+.card h3{margin:0 0 4px;font-size:1.2rem}
+.when{font-weight:600}
+.late{color:var(--warn)}
+.note{margin:6px 0 0;color:var(--muted)}
+.chk{display:flex;gap:10px;align-items:center;padding:5px 0;font-size:1.05rem}
+.chk input{width:22px;height:22px;accent-color:var(--accent)}
+.chk.d span{text-decoration:line-through;color:var(--muted)}
+.foot{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.foot .muted{flex:1;font-size:.9rem}
+label.f{display:block;font-weight:600;margin:16px 0 6px}
+input[type=text],input[type=email],input[type=password],input[type=date],input[type=time],textarea{width:100%;font:inherit;font-size:1.1rem;color:var(--ink);background:var(--surface);border:2px solid var(--line);border-radius:12px;padding:12px 14px}
+textarea{min-height:96px;resize:vertical}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chips .on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.two{display:flex;gap:10px}.two>div{flex:1}
+.err{color:var(--warn);min-height:1.3em;margin:8px 0}
+.add{position:sticky;bottom:calc(14px + env(safe-area-inset-bottom,0px));width:100%;margin-top:8px;padding:15px;font-size:1.1rem}
+.empty{text-align:center;padding:36px 10px}
+</style>
+</head>
+<body>
+<main id="app"><p class="muted">Carregando…</p></main>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import {getFirestore,collection,addDoc,updateDoc,deleteDoc,doc,onSnapshot,serverTimestamp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+var firebaseConfig={
+  apiKey:"AIzaSyBdtEhF81Supt_dgT87V7VCKuCa-gKv8NM",
+  authDomain:"take-b3f29.firebaseapp.com",
+  projectId:"take-b3f29",
+  storageBucket:"take-b3f29.firebasestorage.app",
+  messagingSenderId:"1045120414080",
+  appId:"1:1045120414080:web:cc33ba7ec910481f045165"
+};
+var CASA={"williamcdc.santos@gmail.com":"Will","beatrizs143@gmail.com":"Bea"};
+var fb=initializeApp(firebaseConfig),auth=getAuth(fb),db=getFirestore(fb);
+var TIPOS={compromisso:"Compromisso",tarefa:"Tarefa",lista:"Lista",aviso:"Aviso"};
+var PERG={compromisso:"Qual é o compromisso?",tarefa:"Qual é a tarefa?",lista:"Nome da lista",aviso:"O que você quer avisar?"};
+var S={pronto:false,user:null,itens:[],tab:"rec",form:null,erro:""},unsub=null;
+var app=document.getElementById("app");
+function outro(e){return Object.keys(CASA).filter(function(x){return x!==e})[0]}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function hoje(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function quando(x){
+ if(!x.data)return"";
+ var t=new Date(x.data+"T00:00:00").toLocaleDateString("pt-BR",{weekday:"short",day:"numeric",month:"short"});
+ return x.hora?t+" às "+x.hora:t;
+}
+if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(function(){})}
+
+onAuthStateChanged(auth,function(u){
+ if(unsub){unsub();unsub=null}
+ var em=u&&u.email?u.email.toLowerCase():null;
+ if(em&&CASA[em]){
+  S.user=em;
+  unsub=onSnapshot(collection(db,"itens"),function(snap){
+   S.itens=snap.docs.map(function(d){var o=d.data();o.id=d.id;return o});
+   S.erro="";if(!S.form)render();
+  },function(){S.erro="Não foi possível carregar. Verifique a conexão e as regras do banco.";render()});
+ }else{S.user=null;S.itens=[];if(u)signOut(auth)}
+ S.pronto=true;render();
+});
+
+function render(){
+ if(!S.pronto)return;
+ if(!S.user)return login();
+ if(S.form)return formView();
+ var eu=S.user,ou=outro(eu);
+ var rec=S.itens.filter(function(x){return x.para===eu}),env=S.itens.filter(function(x){return x.de===eu});
+ var pend=rec.filter(function(x){return !x.feito}).length;
+ var lista=(S.tab==="rec"?rec:env).slice().sort(function(a,b){
+  if(!!a.feito!==!!b.feito)return a.feito?1:-1;
+  return (a.data||"9999").localeCompare(b.data||"9999")||(a.hora||"").localeCompare(b.hora||"");
+ });
+ var h='<div class="top"><div><h1>Olá, '+esc(CASA[eu])+'</h1><div class="muted">Casa de Will e Bea</div></div><button class="small" data-act="sair">Sair</button></div>';
+ if(S.erro)h+='<p class="err">'+esc(S.erro)+'</p>';
+ h+='<div class="tabs"><button data-act="tab" data-v="rec" class="'+(S.tab==="rec"?"on":"")+'">Para mim'+(pend?" ("+pend+")":"")+'</button><button data-act="tab" data-v="env" class="'+(S.tab==="env"?"on":"")+'">Enviados</button></div>';
+ if(!lista.length)h+='<div class="empty muted">'+(S.tab==="rec"?"Nada para você por enquanto.":"Você ainda não enviou nada para "+esc(CASA[ou])+".")+'</div>';
+ lista.forEach(function(x){h+=card(x)});
+ h+='<button class="primary add" data-act="novo">Novo para '+esc(CASA[ou])+'</button>';
+ app.innerHTML=h;
+}
+function card(x){
+ var q=quando(x),atras=x.data&&!x.feito&&x.data<hoje();
+ var h='<div class="card'+(x.feito?" done":"")+'"><span class="tag">'+TIPOS[x.tipo]+'</span><h3>'+esc(x.titulo)+'</h3>';
+ if(q)h+='<div class="when'+(atras?" late":"")+'">'+q+(atras?" (atrasado)":"")+'</div>';
+ if(x.nota)h+='<p class="note">'+esc(x.nota)+'</p>';
+ (x.itens||[]).forEach(function(it,j){h+='<label class="chk'+(it.ok?" d":"")+'"><input type="checkbox" data-act="item" data-id="'+x.id+'" data-j="'+j+'"'+(it.ok?" checked":"")+'><span>'+esc(it.t)+'</span></label>'});
+ h+='<div class="foot"><span class="muted">'+(S.tab==="rec"?"De "+esc(CASA[x.de]):"Para "+esc(CASA[x.para])+(x.feito?" · feito":" · pendente"))+'</span>';
+ if(S.tab==="rec")h+='<button class="small" data-act="feito" data-id="'+x.id+'">'+(x.feito?"Desfazer":"Marcar como feito")+'</button>';
+ if(x.de===S.user)h+='<button class="small" data-act="del" data-id="'+x.id+'">Excluir</button>';
+ return h+"</div></div>";
+}
+function login(){
+ app.innerHTML='<h1>Casa</h1><p class="muted">Entre com seu e-mail e senha.</p><label class="f" for="em">E-mail</label><input type="email" id="em" autocomplete="username"><label class="f" for="pw">Senha</label><input type="password" id="pw" autocomplete="current-password"><p class="err" id="e"></p><button class="primary add" data-act="entrar">Entrar</button>';
+ document.getElementById("pw").addEventListener("keydown",function(e){if(e.key==="Enter")entrar()});
+}
+function entrar(){
+ var em=document.getElementById("em").value.trim(),pw=document.getElementById("pw").value,er=document.getElementById("e");
+ if(!em||!pw){er.textContent="Preencha e-mail e senha.";return}
+ er.textContent="Entrando…";
+ signInWithEmailAndPassword(auth,em,pw).catch(function(){er.textContent="E-mail ou senha incorretos."});
+}
+function formView(){
+ var F=S.form,ou=outro(S.user),t=F.tipo;
+ var h='<div class="top"><h2>Novo para '+esc(CASA[ou])+'</h2><button class="small" data-act="cancela">Cancelar</button></div><div class="chips">';
+ Object.keys(TIPOS).forEach(function(k){h+='<button data-act="tipo" data-v="'+k+'" class="'+(k===t?"on":"")+'">'+TIPOS[k]+'</button>'});
+ h+='</div><label class="f" for="fi-titulo">'+PERG[t]+'</label><input type="text" id="fi-titulo" value="'+esc(F.titulo)+'" autocomplete="off">';
+ if(t==="lista")h+='<label class="f" for="fi-itens">Itens (um por linha)</label><textarea id="fi-itens">'+esc(F.itens)+'</textarea>';
+ h+='<div class="two"><div><label class="f" for="fi-data">Data'+(t==="compromisso"||t==="aviso"?"":" (opcional)")+'</label><input type="date" id="fi-data" value="'+esc(F.data)+'"></div>';
+ if(t==="compromisso"||t==="tarefa")h+='<div><label class="f" for="fi-hora">Hora (opcional)</label><input type="time" id="fi-hora" value="'+esc(F.hora)+'"></div>';
+ h+='</div><label class="f" for="fi-nota">Observação (opcional)</label><textarea id="fi-nota">'+esc(F.nota)+'</textarea><p class="err" id="e"></p><button class="primary add" data-act="envia">Enviar para '+esc(CASA[ou])+'</button>';
+ app.innerHTML=h;
+}
+function lerForm(){["titulo","itens","data","hora","nota"].forEach(function(k){var el=document.getElementById("fi-"+k);if(el)S.form[k]=el.value.trim()})}
+function achar(id){return S.itens.find(function(i){return i.id===id})}
+app.addEventListener("click",function(e){
+ var b=e.target.closest("[data-act]");if(!b||b.type==="checkbox")return;
+ var a=b.dataset.act,id=b.dataset.id,x;
+ if(a==="entrar")entrar();
+ else if(a==="sair")signOut(auth);
+ else if(a==="tab"){S.tab=b.dataset.v;render()}
+ else if(a==="novo"){S.form={tipo:"compromisso",titulo:"",itens:"",data:"",hora:"",nota:""};render()}
+ else if(a==="cancela"){S.form=null;render()}
+ else if(a==="tipo"){lerForm();S.form.tipo=b.dataset.v;render()}
+ else if(a==="envia"){
+  lerForm();var F=S.form,er=document.getElementById("e");
+  if(!F.titulo){er.textContent="Escreva o título.";return}
+  if((F.tipo==="compromisso"||F.tipo==="aviso")&&!F.data){er.textContent="Escolha a data.";return}
+  var itens=F.tipo==="lista"?F.itens.split("\n").map(function(s){return s.trim()}).filter(Boolean).map(function(t){return{t:t,ok:false}}):[];
+  if(F.tipo==="lista"&&!itens.length){er.textContent="Adicione pelo menos um item.";return}
+  b.disabled=true;
+  addDoc(collection(db,"itens"),{tipo:F.tipo,titulo:F.titulo,data:F.data,hora:F.hora,nota:F.nota,itens:itens,de:S.user,para:outro(S.user),feito:false,criado:serverTimestamp()})
+   .then(function(){S.form=null;S.tab="env";render()})
+   .catch(function(){b.disabled=false;er.textContent="Não foi possível enviar. Tente de novo."});
+ }
+ else if(a==="feito"){x=achar(id);if(x)updateDoc(doc(db,"itens",id),{feito:!x.feito})}
+ else if(a==="del"){if(confirm("Excluir este item?"))deleteDoc(doc(db,"itens",id))}
+});
+app.addEventListener("change",function(e){
+ var c=e.target;if(c.dataset.act!=="item")return;
+ var x=achar(c.dataset.id);if(!x)return;
+ var itens=x.itens.map(function(i){return{t:i.t,ok:i.ok}});
+ itens[+c.dataset.j].ok=c.checked;
+ updateDoc(doc(db,"itens",x.id),{itens:itens,feito:itens.every(function(i){return i.ok})});
+});
+</script>
+</body>
+</html>
